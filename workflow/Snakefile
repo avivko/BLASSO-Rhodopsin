@@ -5,13 +5,18 @@ from glob import glob
 
 conda: "envs/conda.yaml"
 
+if 'targets' in config:
+	targets = config["targets"]
+else:
+	targets = 'targets/sequences.fasta'
+
 rule train:
 	input:
 		"training/blasso.RData"
 
 rule predict:
 	input:
-		"predict/sequences.tsv"
+		targets + ".tsv"
 
 rule training_prepare_sequences:
 	input:
@@ -39,14 +44,14 @@ rule training_copy_positions:
 	shell:
 		"cp {input} {output}"
 
-rule prepare_target_set:
-	input:
-		fasta = "original/Data/sequences.fas",
-		dat = "original/Data/wavelength.dat"
-	output:
-		"targets/sequences.fasta"
-	shell:
-		"seqkit fx2tab {input.fasta} | paste {input.dat} - | grep ^NA | cut -f2,3 | seqkit tab2fx | seqkit rename | seqkit seq -go {output}"
+#rule prepare_target_set:
+#	input:
+#		fasta = "original/Data/sequences.fas",
+#		dat = "original/Data/wavelength.dat"
+#	output:
+#		targets
+#	shell:
+#		"seqkit fx2tab {input.fasta} | paste {input.dat} - | grep ^NA | cut -f2,3 | seqkit tab2fx | seqkit rename | seqkit seq -go {output}"
 
 rule training_prepare_wavelength:
 	input:
@@ -124,9 +129,9 @@ rule training:
 rule targets_align:
 	input:
 		train = "training/sequences.fas",
-		targets = "targets/sequences.fasta"
+		targets = targets
 	output:
-		"predict/sequences.mafft"
+		targets + ".mafft"
 	threads:
 		workflow.cores
 	shell:
@@ -134,11 +139,11 @@ rule targets_align:
 
 rule targets_predict:
 	input:
-		mafft     = "predict/sequences.mafft",
+		mafft     = targets + ".mafft",
 		blasso    = "training/blasso.RData",
 		positions = "training/position_retinal.dat",
 		amino_feature_file = "training/amino_acid_feature.csv"
 	output:
-		"predict/sequences.tsv"
+		targets + ".tsv"
 	script:
 		"scripts/predict.R"

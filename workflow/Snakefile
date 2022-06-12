@@ -1,149 +1,160 @@
-import yaml
-import os
-import os.path
-from glob import glob
 
-conda: "envs/conda.yaml"
-
-if 'targets' in config:
-	targets = config["targets"]
-else:
-	targets = 'targets/sequences.fasta'
-
-rule train:
-	input:
-		"training/blasso.RData"
+targets ,= glob_wildcards('targets/{target}.fasta')
 
 rule predict:
-	input:
-		targets + ".tsv"
+    input:
+        expand('output/{target}.tsv', target = targets)
+
+rule train:
+    input:
+        "training/blasso.RData"
 
 rule training_prepare_sequences:
-	input:
-		fasta = "original/Data/sequences.fas",
-		dat = "original/Data/wavelength.dat"
-	output:
-		nogaps = "training/sequences.fasta",
-		alignment = "training/sequences.fas"
-	shell:
-		"seqkit fx2tab {input.fasta} | paste {input.dat} - | grep -v ^NA | cut -f2,3 | seqkit tab2fx | seqkit rename | tee {output.alignment} | seqkit seq -go {output.nogaps}"
+    input:
+        fasta = "original/Data/sequences.fas",
+        dat = "original/Data/wavelength.dat"
+    output:
+        nogaps = "training/sequences.fasta",
+        alignment = "training/sequences.fas"
+    conda:
+        "envs/tools.yaml"
+    shell:
+        "seqkit fx2tab {input.fasta} | paste {input.dat} - | grep -v ^NA | cut -f2,3 | seqkit tab2fx | seqkit rename | tee {output.alignment} | seqkit seq -go {output.nogaps}"
 
 rule training_copy_amino_acid_feature:
-	input:
-		"original/Data/amino_acid_feature.csv"
-	output:
-		"training/amino_acid_feature.csv"
-	shell:
-		"cp {input} {output}"
+    input:
+        "original/Data/amino_acid_feature.csv"
+    output:
+        "training/amino_acid_feature.csv"
+    shell:
+        "cp {input} {output}"
 
 rule training_copy_positions:
-	input:
-		"original/Data/position_retinal.dat"
-	output:
-		"training/position_retinal.dat"
-	shell:
-		"cp {input} {output}"
+    input:
+        "original/Data/position_retinal.dat"
+    output:
+        "training/position_retinal.dat"
+    shell:
+        "cp {input} {output}"
 
 #rule prepare_target_set:
-#	input:
-#		fasta = "original/Data/sequences.fas",
-#		dat = "original/Data/wavelength.dat"
-#	output:
-#		targets
-#	shell:
-#		"seqkit fx2tab {input.fasta} | paste {input.dat} - | grep ^NA | cut -f2,3 | seqkit tab2fx | seqkit rename | seqkit seq -go {output}"
+#    input:
+#        fasta = "original/Data/sequences.fas",
+#        dat = "original/Data/wavelength.dat"
+#    output:
+#        targets
+#    shell:
+#        "seqkit fx2tab {input.fasta} | paste {input.dat} - | grep ^NA | cut -f2,3 | seqkit tab2fx | seqkit rename | seqkit seq -go {output}"
 
 rule training_prepare_wavelength:
-	input:
-		"original/Data/wavelength.dat"
-	output:
-		dat = "training/wavelength.dat",
-		zero = "training/zero.dat"
-	shell:
-		"grep -v NA {input} | tee {output.dat} | sed -E s/.+/0/ > {output.zero}"
+    input:
+        "original/Data/wavelength.dat"
+    output:
+        dat = "training/wavelength.dat",
+        zero = "training/zero.dat"
+    shell:
+        "grep -v NA {input} | tee {output.dat} | sed s/.*/0/ > {output.zero}"
 
 rule training_align:
-	input:
-		"training/sequences.fasta"
-	output:
-		"training/sequences.mafft"
-	threads:
-		workflow.cores
-	shell:
-		"mafft --thread {threads} --localpair --maxiterate 1000 {input} > {output}"
+    input:
+        "training/sequences.fasta"
+    output:
+        "training/sequences.mafft"
+    threads:
+        workflow.cores
+    conda:
+        "envs/tools.yaml"
+    shell:
+        "mafft --thread {threads} --localpair --maxiterate 1000 {input} > {output}"
 
 rule training_annotate:
-	input:
-		"training/sequences.mafft"
-	output:
-		"training/sequences.a2m"
-	shell:
-		"hhconsensus -i {input} -o stdout -M 50 | addss.pl stdin stdout | reformat.pl a3m a2m /dev/stdin {output}"
+    input:
+        "training/sequences.mafft"
+    output:
+        "training/sequences.a2m"
+    conda:
+        "envs/tools.yaml"
+    shell:
+        """
+        "$CONDA_PREFIX"/scripts/reformat.pl fas a3m {input} /dev/stdout -M 50 -v 0 | hhconsensus -i stdin -o stdout | "$CONDA_PREFIX"/scripts/addss.pl stdin stdout | "$CONDA_PREFIX"/scripts/reformat.pl a3m a2m /dev/stdin {output}
+        """
 
 rule training_convert:
-	input:
-		"training/sequences.a2m"
-	output:
-		"training/sequences.a2m.fas"
-	shell:
-		"seqkit fx2tab {input} | tail -n+4 | seqkit tab2fx | seqkit replace -sp \\\\. -r - -o {output}"
+    input:
+        "training/sequences.a2m"
+    output:
+        "training/sequences.a2m.fas"
+    conda:
+        "envs/tools.yaml"
+    shell:
+        "seqkit fx2tab {input} | tail -n+4 | seqkit tab2fx | seqkit replace -sp \\\\. -r - -o {output}"
 
 rule training_helix_positions:
-	input:
-		"training/sequences.a2m"
-	output:
-		"training/position_mafft.dat"
-	script:
-		"scripts/positions.py"
+    input:
+        "training/sequences.a2m"
+    output:
+        "training/position_mafft.dat"
+    conda:
+        "envs/python.yaml"
+    script:
+        "scripts/positions.py"
 
 rule training_mafft:
-	input:
-		wavelength = "training/wavelength.dat",
-		zero       = "training/zero.dat",
-		positions  = "training/position_mafft.dat",
-		sequences  = "training/sequences.mafft",
-		amino_acid_feature = "training/amino_acid_feature.csv"
-	params:
-		n_sample = 500,
-		dim_prescreening = 100
-	output:
-		"training/blasso_mafft.RData"
-	script:
-		"scripts/train.R"
+    input:
+        wavelength = "training/wavelength.dat",
+        zero       = "training/zero.dat",
+        positions  = "training/position_mafft.dat",
+        sequences  = "training/sequences.mafft",
+        amino_acid_feature = "training/amino_acid_feature.csv"
+    output:
+        "training/blasso_mafft.RData"
+    params:
+        n_sample = 500,
+        dim_prescreening = 100
+    conda:
+        "envs/r.yaml"
+    script:
+        "scripts/train.R"
 
 rule training:
-	input:
-		wavelength = "training/wavelength.dat",
-		zero       = "training/zero.dat",
-		positions  = "training/position_retinal.dat",
-		sequences  = "training/sequences.fas",
-		amino_acid_feature = "training/amino_acid_feature.csv"
-	params:
-		n_sample = 10000,
-		dim_prescreening = -1
-	output:
-		"training/blasso.RData"
-	script:
-		"scripts/train.R"
+    input:
+        wavelength = "training/wavelength.dat",
+        zero       = "training/zero.dat",
+        positions  = "training/position_retinal.dat",
+        sequences  = "training/sequences.fas",
+        amino_acid_feature = "training/amino_acid_feature.csv"
+    output:
+        "training/blasso.RData"
+    params:
+        n_sample = 10000,
+        dim_prescreening = -1
+    conda:
+        "envs/r.yaml"
+    script:
+        "scripts/train.R"
 
 rule targets_align:
-	input:
-		train = "training/sequences.fas",
-		targets = targets
-	output:
-		targets + ".mafft"
-	threads:
-		workflow.cores
-	shell:
-		"mafft --thread {threads} --localpair --maxiterate 1000 --keeplength --add {input.targets} {input.train} > {output}"
+    input:
+        train = "training/sequences.fas",
+        fasta = "targets/{target}.fasta"
+    output:
+        "analysis/{target}.mafft"
+    conda:
+        "envs/tools.yaml"
+    threads:
+        workflow.cores
+    shell:
+        "mafft --thread {threads} --localpair --maxiterate 1000 --keeplength --add {input.fasta} {input.train} > {output}"
 
 rule targets_predict:
-	input:
-		mafft     = targets + ".mafft",
-		blasso    = "training/blasso.RData",
-		positions = "training/position_retinal.dat",
-		amino_feature_file = "training/amino_acid_feature.csv"
-	output:
-		targets + ".tsv"
-	script:
-		"scripts/predict.R"
+    input:
+        mafft     = "analysis/{target}.mafft",
+        blasso    = "training/blasso.RData",
+        positions = "training/position_retinal.dat",
+        amino_feature_file = "training/amino_acid_feature.csv"
+    output:
+        "output/{target}.tsv"
+    conda:
+        "envs/r.yaml"
+    script:
+        "scripts/predict.R"

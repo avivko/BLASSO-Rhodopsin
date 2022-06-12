@@ -3,16 +3,15 @@ library(seqinr)
 library(pracma)
 library(monomvn)
 
-source("workflow/scripts/seqBlasso.R")
+snakemake@source("seqBlasso.R")
 
-input <- snakemake@input
-
-mafft_file  <- input$mafft
-blasso_file <- input$blasso
-pos_file    <- input$positions
-amino_feature_file <- input$amino_feature_file
+with(snakemake@input, {
+    mafft_file  <<- mafft
+    blasso_file <<- blasso
+    pos_file    <<- positions
+    amino_feature_file <<- amino_feature_file
+})
 output_file <- as.character(snakemake@output)
-
 position <- as.matrix(read.table(pos_file))
 
 # blasso object
@@ -35,10 +34,10 @@ aseq_sub <- fasta$fasta.seq
 seq_len <- fasta$seq.len
 
 X <- do.call("cbind", lapply(1:ncol(aa_feat), function(i) {
-	matrix(aa_feat[aseq_sub, i], n_all, seq_len)
+    matrix(aa_feat[aseq_sub, i], n_all, seq_len)
 }))
 for (i in 1:nrow(X)) {
-	X[i,] <- c(t(matrix(X[i,], ncol(aseq_sub), ncol(aa_feat))))
+    X[i,] <- c(t(matrix(X[i,], ncol(aseq_sub), ncol(aa_feat))))
 }
 wavelength <- cbind(1,X) %*% blasso$beta_sample
 wl_mean <- apply(wavelength, 1, mean)
@@ -47,8 +46,8 @@ wl_sd <- apply(wavelength, 1, sd)
 ###############################################
 
 pred_wavelen_sample <- data.frame(
-	id = sample_names[-train_range],
-	wl_mean = wl_mean[-train_range],
-	wl_sd = wl_sd[-train_range]
+    id = sample_names[-train_range],
+    wl_mean = wl_mean[-train_range],
+    wl_sd = wl_sd[-train_range]
 )
 write.table(pred_wavelen_sample, file = output_file, quote = F, row.names = F, sep = "\t")

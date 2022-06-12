@@ -1,0 +1,8 @@
+channels:
+ - r
+ - bioconda
+dependencies:
+ - r=3.6.0
+ - r-seqinr=3.4_5
+ - r-pracma=2.2.5
+ - r-monomvn=1.9_10

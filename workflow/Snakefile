@@ -1,6 +1,16 @@
 
 targets ,= glob_wildcards('targets/{target}.fasta')
 
+rule link_librlapack:
+    conda:
+        "envs/r.yaml"
+    input:
+        "$CONDA_PREFIX/lib/liblapack.so"
+    output:
+        "$CONDA_PREFIX/lib/libRlapack.so"
+    shell:
+        "ln -s {input} {output}"
+
 rule predict:
     input:
         expand('output/{target}.tsv', target = targets)
@@ -113,17 +123,8 @@ rule training_mafft:
         dim_prescreening = 100
     conda:
         "envs/r.yaml"
-    shell:
-        """
-        # Run the command before executing the script (link libRlapack.so to prevent error)
-        if [ ! -f $CONDA_PREFIX/lib/libRlapack.so ]; then
-            ln -s $CONDA_PREFIX/lib/liblapack.so $CONDA_PREFIX/lib/libRlapack.so
-        fi
-        # Execute the script without invoking the shell
-        python -c "import subprocess; subprocess.run(['scripts/train.R', '{input}', '{output}'])"
-        """
-    #script:
-    #    "scripts/train.R"
+    script:
+        "scripts/train.R"
 
 rule training:
     input:

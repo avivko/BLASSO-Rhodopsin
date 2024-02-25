@@ -102,11 +102,17 @@ rule training_helix_positions:
 rule link_librlapack:
     conda:
         "envs/r.yaml"
+    output:
+        "link_librlapack.success"
     shell:
-        """if [ ! -f $CONDA_PREFIX/lib/libRlapack.so ]; then ln -s $CONDA_PREFIX/lib/liblapack.so $CONDA_PREFIX/lib/libRlapack.so; fi"""
+        "if [ ! -f $CONDA_PREFIX/lib/libRlapack.so ]; then "
+        "  ln -s $CONDA_PREFIX/lib/liblapack.so $CONDA_PREFIX/lib/libRlapack.so;"
+        "fi"
+        "touch {output}"
 
 rule training_mafft:
     input:
+        "link_librlapack.success",
         wavelength = "training/wavelength.dat",
         zero       = "training/zero.dat",
         positions  = "training/position_mafft.dat",
@@ -124,6 +130,7 @@ rule training_mafft:
 
 rule training:
     input:
+        "link_librlapack.success",
         wavelength = "training/wavelength.dat",
         zero       = "training/zero.dat",
         positions  = "training/position_retinal.dat",
@@ -154,6 +161,7 @@ rule targets_align:
 
 rule targets_predict:
     input:
+        "link_librlapack.success",
         mafft     = "analysis/{target}.mafft",
         blasso    = "training/blasso.RData",
         positions = "training/position_retinal.dat",

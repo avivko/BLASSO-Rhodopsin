@@ -1,12 +1,6 @@
 
 targets ,= glob_wildcards('targets/{target}.fasta')
 
-rule link_librlapack:
-    conda:
-        "envs/r.yaml"
-    shell:
-        """if [ ! -f $CONDA_PREFIX/lib/libRlapack.so ]; then ln -s $CONDA_PREFIX/lib/liblapack.so $CONDA_PREFIX/lib/libRlapack.so; fi"""
-
 rule predict:
     input:
         expand('output/{target}.tsv', target = targets)
@@ -104,6 +98,12 @@ rule training_helix_positions:
         "envs/python.yaml"
     script:
         "scripts/positions.py"
+
+rule link_librlapack:
+    conda:
+        "envs/r.yaml"
+    shell:
+        """if [ ! -f $CONDA_PREFIX/lib/libRlapack.so ]; then ln -s $CONDA_PREFIX/lib/liblapack.so $CONDA_PREFIX/lib/libRlapack.so; fi"""
 
 rule training_mafft:
     input:

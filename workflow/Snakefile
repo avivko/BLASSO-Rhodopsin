@@ -105,10 +105,7 @@ rule link_librlapack:
     output:
         "link_librlapack.success"
     shell:
-        "if [ ! -f $CONDA_PREFIX/lib/libRlapack.so ]; then "
-        "  ln -s $CONDA_PREFIX/lib/liblapack.so $CONDA_PREFIX/lib/libRlapack.so;"
-        "fi"
-        "touch {output}"
+        """if [ ! -f $CONDA_PREFIX/lib/libRlapack.so ]; then ln -s $CONDA_PREFIX/lib/liblapack.so $CONDA_PREFIX/lib/libRlapack.so; fi && touch {output}"""
 
 rule training_mafft:
     input:
